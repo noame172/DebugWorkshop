@@ -25,5 +25,6 @@ void part2()
 	safe_string_copy(dest, BUF_SIZE, src);
 
 	std::cout << src << std::endl;
+	dest[12] = '\0';
 	std::cout << dest << std::endl;
 }
