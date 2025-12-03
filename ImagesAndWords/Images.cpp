@@ -1,9 +1,9 @@
-#include <iostream>
+﻿#include <iostream>
 #include <fstream>
 #include <stdint.h>
-
 #include <stdlib.h>		// srand, rand
 #include <time.h>
+#include <cstring>		// memcpy
 
 struct ImageHeader
 {
@@ -24,77 +24,95 @@ bool WriteImage(Image* img, const char* filename)
 	std::ofstream os(filename, std::ifstream::binary);
 	if (!os)
 		return false;
-
 	// write header first
 	os.write((char*)&img->header, sizeof(ImageHeader));
-
 	// calculate image size
 	uint16_t imgsize = img->header.width * img->header.height;
-
 	// write image content
 	os.write(img->data, imgsize);
-
 	return true;
 }
 
-Image *ReadImage(const char* filename)
+Image* ReadImage(const char* filename)
 {
 	std::ifstream is(filename, std::ifstream::binary);
 	if (!is)
 		return nullptr;
 
 	Image* img = new Image();
+	img->data = nullptr;  // אתחול בטוח
 
 	// read header first
 	is.read((char*)&img->header, sizeof(ImageHeader));
+
+	// בדיקת תקינות ה-signature
+	if (memcmp(img->header.signature, "MAGI", 4) != 0)
+	{
+		delete img;
+		return nullptr;
+	}
+
+	// בדיקת תקינות גודל התמונה (מניעת הקצאת זיכרון אדירה)
+	if (img->header.width == 0 || img->header.height == 0 ||
+		img->header.width > 10000 || img->header.height > 10000)
+	{
+		delete img;
+		return nullptr;
+	}
 
 	// calculate image size
 	uint16_t imgsize = img->header.width * img->header.height;
 	img->data = new char[imgsize];
 
 	// read image content
-	char* tmpbuff = new char[img->header.width];
+	char* tmpbuff = new char[img->header.width + 1];
 	for (int i = 0; i < img->header.height; i++)
 	{
 		is.read(tmpbuff, img->header.width);
 		memcpy(img->data + (i * img->header.width), tmpbuff, img->header.width);
 	}
+	delete[] tmpbuff;  // שחרור הבאפר הזמני
+
 	return img;
 }
 
 void FreeImage(Image* img)
 {
-	delete img;
+	if (img)
+	{
+		if (img->data)
+		{
+			delete[] img->data;  // ✅ שחרור הזיכרון של המערך
+		}
+		delete img;
+	}
 }
 
-Image *GenerateDummyImage(uint16_t width, uint16_t height)
+Image* GenerateDummyImage(uint16_t width, uint16_t height)
 {
 	Image* img = new Image();
-
 	// create image header
 	memcpy(img->header.signature, "MAGI", 4);
 	img->header.width = width;
 	img->header.height = height;
 	img->header.mode = 1;
-
 	// calculate image size
 	uint16_t imgsize = img->header.width * img->header.height;
 	img->data = new char[imgsize];
-
 	// generate dummy content
 	srand((unsigned int)time(0));
 	char* pos = img->data;
 	for (int i = 0; i < imgsize; i++)
 		*pos++ = rand() % 255;
-
 	return img;
 }
 
-
 int main()
 {
-	Image *im = ReadImage("img1.magi");
-	FreeImage(im);
+	Image* im1 = ReadImage("img1.magi");
+	FreeImage(im1);
 
+	Image* im2 = ReadImage("img2.magi");
+	FreeImage(im2);
 	return 0;
 }
